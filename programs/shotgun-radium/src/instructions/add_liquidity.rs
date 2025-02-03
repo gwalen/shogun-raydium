@@ -6,7 +6,7 @@ use raydium_amm_cpi::Deposit;
 pub struct AddLiquidity<'info> {
     /// CHECK: Safe
     pub amm_program: UncheckedAccount<'info>,
-    /// CHECK: Safe. Amm Account
+    /// CHECK: Safe. Amm Account - pool id
     #[account(mut)]
     pub amm: UncheckedAccount<'info>,
     /// CHECK: Safe. Amm authority
@@ -22,20 +22,20 @@ pub struct AddLiquidity<'info> {
     pub amm_lp_mint: UncheckedAccount<'info>,
     /// CHECK: Safe. amm_coin_vault account, $authority can transfer amount.
     #[account(mut)]
-    pub amm_coin_vault: UncheckedAccount<'info>,
+    pub amm_base_vault: UncheckedAccount<'info>,
     /// CHECK: Safe. amm_pc_vault account, $authority can transfer amount.
     #[account(mut)]
-    pub amm_pc_vault: UncheckedAccount<'info>,
+    pub amm_quote_vault: UncheckedAccount<'info>,
     /// CHECK: Safe. OpenBook market account, OpenBook program is the owner.
     pub market: UncheckedAccount<'info>,
     /// CHECK: Safe. OpenBook market event queue account, OpenBook program is the owner.
     pub market_event_queue: UncheckedAccount<'info>,
     /// CHECK: Safe. User token coin to deposit into.
     #[account(mut)]
-    pub user_token_coin: UncheckedAccount<'info>,
+    pub user_token_base: UncheckedAccount<'info>,
     /// CHECK: Safe. User token pc to deposit into.
     #[account(mut)]
-    pub user_token_pc: UncheckedAccount<'info>,
+    pub user_token_quote: UncheckedAccount<'info>,
     /// CHECK: Safe. User lp token, to deposit the generated tokens, user is the owner
     #[account(mut)]
     pub user_token_lp: UncheckedAccount<'info>,
@@ -54,12 +54,12 @@ impl<'info> From<&&mut AddLiquidity<'info>> for raydium_amm_cpi::Deposit<'info> 
             amm_open_orders: accounts.amm_open_orders.clone(),
             amm_target_orders: accounts.amm_target_orders.clone(),
             amm_lp_mint: accounts.amm_lp_mint.clone(),
-            amm_coin_vault: accounts.amm_coin_vault.clone(),
-            amm_pc_vault: accounts.amm_pc_vault.clone(),
+            amm_coin_vault: accounts.amm_base_vault.clone(),
+            amm_pc_vault: accounts.amm_quote_vault.clone(),
             market: accounts.market.clone(),
             market_event_queue: accounts.market_event_queue.clone(),
-            user_token_coin: accounts.user_token_coin.clone(),
-            user_token_pc: accounts.user_token_pc.clone(),
+            user_token_coin: accounts.user_token_base.clone(),
+            user_token_pc: accounts.user_token_quote.clone(),
             user_token_lp: accounts.user_token_lp.clone(),
             user_owner: accounts.user_owner.clone(),
             token_program: accounts.token_program.clone(),

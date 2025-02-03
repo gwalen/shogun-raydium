@@ -5,6 +5,7 @@
     "lint": "prettier */*.js \"*/**/*{.js,.ts}\" --check"
   },
   "dependencies": {
+    "@raydium-io/raydium-sdk-v2": "0.1.111-alpha",
     "@coral-xyz/anchor": "^0.30.1",
     "@solana/spl-token": "^0.4.0",
     "@solana/web3.js": "^1.90.0",
