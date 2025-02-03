@@ -14,11 +14,11 @@ declare_id!("CHbnhtNeCb6YmDkesWCbh2swC35HqkGPhC7q17CzMuak");
 pub mod shotgun_radium {
     use super::*;
 
-    // TODO: remove all commented code
-    // pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
-    //     msg!("Greetings from: {:?}", ctx.program_id);
-    //     Ok(())
-    // }
+    // TODO: remove after tests
+    pub fn initialize(ctx: Context<Initialize>) -> Result<()> {
+        msg!("Greetings from: {:?}", ctx.program_id);
+        Ok(())
+    }
 
     pub fn add_liquidity(
         ctx: Context<AddLiquidity>,
@@ -38,5 +38,5 @@ pub mod shotgun_radium {
 
 }
 
-// #[derive(Accounts)]
-// pub struct Initialize {}
+#[derive(Accounts)]
+pub struct Initialize {}
