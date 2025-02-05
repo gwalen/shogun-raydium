@@ -1,6 +1,6 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
-import { ShotgunRadium } from "../target/types/shotgun_radium";
+import { ShogunRaydium } from "../target/types/shogun_raydium";
 import { PublicKey, Connection, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, sendAndConfirmTransaction, Signer, TransactionInstruction, AddressLookupTableAccount, VersionedTransaction, TransactionMessage, ConfirmOptions, TransactionSignature } from "@solana/web3.js";
 import * as assert from "assert";
 import { createSyncNativeInstruction, getAccount, getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount, NATIVE_MINT } from "@solana/spl-token";
@@ -22,7 +22,7 @@ const USDC_MINT_ADDRESS = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwy
 const USDC_AMOUNT_IMPORTED_WITH_ANCHOR_TOML = 420690000000000n;
 const SOL_USDC_POOL_ID = "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2";
 
-describe("shotgun-radium", () => {
+describe("shogun-raydium", () => {
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -30,7 +30,7 @@ describe("shotgun-radium", () => {
 
   let connection: Connection = anchor.getProvider().connection;
 
-  const program = anchor.workspace.ShotgunRadium as Program<ShotgunRadium>;
+  const program = anchor.workspace.ShogunRaydium as Program<ShogunRaydium>;
 
   let raydium: Raydium;
   let poolKeys: AmmV4Keys | AmmV5Keys | undefined;

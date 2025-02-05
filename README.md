@@ -1,4 +1,4 @@
-# Shotgun - Raydium Liquidity Management
+# Shogun - Raydium Liquidity Management
 
 This program contains two instructions that interact with the Raydium AMM liquidity pool:
 * `AddLiquidity`

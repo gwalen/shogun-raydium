@@ -11,7 +11,7 @@ use handlers::*;
 declare_id!("CHbnhtNeCb6YmDkesWCbh2swC35HqkGPhC7q17CzMuak");
 
 #[program]
-pub mod shotgun_radium {
+pub mod shogun_raydium {
     use super::*;
 
     pub fn add_liquidity(
