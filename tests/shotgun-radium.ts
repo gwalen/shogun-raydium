@@ -10,10 +10,7 @@ import {
   AmmV4Keys,
   AmmV5Keys,
   Raydium,
-  OPEN_BOOK_PROGRAM,
-  LiquidityPoolKeys,
   toBN,
-  removeLiquidityInstruction,
 } from '@raydium-io/raydium-sdk-v2'
 
 
@@ -25,8 +22,6 @@ const USDC_MINT_ADDRESS = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwy
 const USDC_AMOUNT_IMPORTED_WITH_ANCHOR_TOML = 420690000000000n;
 
 describe("shotgun-radium", () => {
-  const marketProgramId = OPEN_BOOK_PROGRAM;  // or this one : SERUM_PROGRAM_ID_V3 (which is in the consts) ?
-
   // Configure the client to use the local cluster.
   const provider = anchor.AnchorProvider.env();
   anchor.setProvider(provider);
@@ -54,12 +49,6 @@ describe("shotgun-radium", () => {
       USDC_MINT_ADDRESS,
       baseWallet.publicKey,
     );
-    // baseWalletUsdcAta = (await getOrCreateAssociatedTokenAccount(
-    //   connection,
-    //   baseWallet.payer,
-    //   USDC_MINT_ADDRESS,
-    //   baseWallet.publicKey
-    // )).address;
     baseWalletWSolAta = (await getOrCreateAssociatedTokenAccount(
       connection,
       baseWallet.payer,
@@ -73,8 +62,8 @@ describe("shotgun-radium", () => {
     const baseWalletUsdcBalance = await getAccount(connection, baseWalletUsdcAta).then((token) => token.amount);
     const baseWalletWSolBalance = await getAccount(connection, baseWalletWSolAta).then((token) => token.amount);
     assert.equal(baseWalletUsdcBalance, USDC_AMOUNT_IMPORTED_WITH_ANCHOR_TOML);
-    console.log("base wallet USDC:", baseWalletUsdcBalance);
-    console.log("base wallet WSOL:", baseWalletWSolBalance);
+    // console.log("base wallet USDC:", baseWalletUsdcBalance);
+    // console.log("base wallet WSOL:", baseWalletWSolBalance);
   });
 
   it("Is initialized!", async () => {
@@ -92,8 +81,8 @@ describe("shotgun-radium", () => {
     poolInfo = data[0] as ApiV3PoolInfoStandardItem;
     poolKeys = await raydium.liquidity.getAmmPoolKeys(poolId);
 
-    console.log("Pool info: ", poolInfo);
-    console.log("Pool keys: ", poolKeys);
+    // console.log("Pool info: ", poolInfo);
+    // console.log("Pool keys: ", poolKeys);
 
     baseWalletLPAta = getAssociatedTokenAddressSync(
       new PublicKey(poolInfo.lpMint.address),
@@ -101,8 +90,8 @@ describe("shotgun-radium", () => {
     );
 
     // TODO: remove this is early testing
-    const tx = await program.methods.initialize().rpc();
-    console.log("Your transaction signature", tx);
+    // const tx = await program.methods.initialize().rpc();
+    // console.log("Your transaction signature", tx);
   });
 
   let lpTokensAfterDeposit = 0n;
@@ -133,15 +122,16 @@ describe("shotgun-radium", () => {
     );
 
     const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
-    console.log("LP tokens after adding liquidity: ", baseWalletLPBalance);
+    // console.log("LP tokens after adding liquidity: ", baseWalletLPBalance);
     assert.ok(baseWalletLPBalance > 0);
     lpTokensAfterDeposit = baseWalletLPBalance;
   });
 
   it("remove liquidity", async () => {
-    const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
+    let baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
 
-    const removeLiquidityIx = await createRemoveLiquidityInstruction(lpTokensToWithdraw);
+    // Remove all liquidity
+    const removeLiquidityIx = await createRemoveLiquidityInstruction(baseWalletLPBalance);
 
     await sendTxWithConfirmation(
       provider,
@@ -149,9 +139,11 @@ describe("shotgun-radium", () => {
       [removeLiquidityIx]
     );
 
-    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
-    console.log("LP tokens after removing liquidity: ", baseWalletLPBalance);
-    assert.ok(baseWalletLPBalance < lpTokensAfterDeposit);
+    console.log("")
+
+    baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
+    // console.log("LP tokens after removing liquidity: ", baseWalletLPBalance);
+    assert.ok(baseWalletLPBalance == 0n);
   });
 
 
@@ -167,8 +159,8 @@ describe("shotgun-radium", () => {
 
     const addLiquidityIx = await createAddLiquidityInstruction(maxBaseAmountDeposit, r.maxAnotherAmount.raw);
 
+    // Partially remove liquidity from the pool which is added in addLiquidity instruction
     const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
-
     const removeLiquidityIx = await createRemoveLiquidityInstruction(lpTokensToWithdraw);
 
     // Create transaction with two instructions to be executed in order they are attached
@@ -179,7 +171,8 @@ describe("shotgun-radium", () => {
     );
 
     const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
-    console.log("LP tokens after adding and removing liquidity: ", baseWalletLPBalance);
+    // console.log("LP tokens after adding and removing liquidity: ", baseWalletLPBalance);
+    assert.ok(baseWalletLPBalance < lpTokensAfterDeposit);
   });
 
 
@@ -271,7 +264,7 @@ export async function convertSolToWsol(connection: Connection, payer: Keypair, a
     payer.publicKey, // Owner of the account
   );
 
-  // Step 5: Transfer SOL into the associated token account (wrap SOL to WSOL)
+  // Transfer SOL into the associated token account (wrap SOL to WSOL)
   transaction.add(
     SystemProgram.transfer({
       fromPubkey: payer.publicKey, // Payer's SOL account
@@ -284,9 +277,7 @@ export async function convertSolToWsol(connection: Connection, payer: Keypair, a
   const syncNativeInstruction = createSyncNativeInstruction(wsolAta.address);
   transaction.add(syncNativeInstruction);
 
-  // Step 7: Send and confirm the transaction
-  const signature = await sendAndConfirmTransaction(connection, transaction, [payer]);
-  console.log(`Transaction confirmed: ${signature}`);
+  await sendAndConfirmTransaction(connection, transaction, [payer]);
 
   // Return the WSOL-associated token account address
   return wsolAta.address;
