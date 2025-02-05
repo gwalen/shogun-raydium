@@ -13,6 +13,7 @@ import {
   OPEN_BOOK_PROGRAM,
   LiquidityPoolKeys,
   toBN,
+  removeLiquidityInstruction,
 } from '@raydium-io/raydium-sdk-v2'
 
 
@@ -108,10 +109,10 @@ describe("shotgun-radium", () => {
 
   it("add liquidity", async () => {
 
-    const max_base_amount = 1 * LAMPORTS_PER_SOL;
+    const maxBaseAmount = 1 * LAMPORTS_PER_SOL;
     const r = raydium.liquidity.computePairAmount({
       poolInfo,
-      amount: max_base_amount,
+      amount: maxBaseAmount,
       baseIn: true,
       slippage: new Percent(1, 100), // 1%
     })
@@ -123,10 +124,73 @@ describe("shotgun-radium", () => {
       baseWallet.publicKey,
     )).address;
 
-    const tx = await program.methods
+    const addLiquidityIx = await createAddLiquidityInstruction(maxBaseAmount, r.maxAnotherAmount.raw);
+
+    await sendTxWithConfirmation(
+      provider,
+      [baseWallet.payer],
+      [addLiquidityIx]
+    );
+
+    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
+    console.log("LP tokens after adding liquidity: ", baseWalletLPBalance);
+    assert.ok(baseWalletLPBalance > 0);
+    lpTokensAfterDeposit = baseWalletLPBalance;
+  });
+
+  it("remove liquidity", async () => {
+    const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
+
+    const removeLiquidityIx = await createRemoveLiquidityInstruction(lpTokensToWithdraw);
+
+    await sendTxWithConfirmation(
+      provider,
+      [baseWallet.payer],
+      [removeLiquidityIx]
+    );
+
+    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
+    console.log("LP tokens after removing liquidity: ", baseWalletLPBalance);
+    assert.ok(baseWalletLPBalance < lpTokensAfterDeposit);
+  });
+
+
+  it("add liquidity and remove liquidity", async () => {
+
+    const maxBaseAmountDeposit = 1 * LAMPORTS_PER_SOL;
+    const r = raydium.liquidity.computePairAmount({
+      poolInfo,
+      amount: maxBaseAmountDeposit,
+      baseIn: true,
+      slippage: new Percent(1, 100), // 1%
+    })
+
+    const addLiquidityIx = await createAddLiquidityInstruction(maxBaseAmountDeposit, r.maxAnotherAmount.raw);
+
+    const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
+
+    const removeLiquidityIx = await createRemoveLiquidityInstruction(lpTokensToWithdraw);
+
+    // Create transaction with two instructions to be executed in order they are attached
+    await sendTxWithConfirmation(
+      provider,
+      [baseWallet.payer],
+      [addLiquidityIx, removeLiquidityIx]
+    );
+
+    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
+    console.log("LP tokens after adding and removing liquidity: ", baseWalletLPBalance);
+  });
+
+
+  async function createAddLiquidityInstruction(
+    maxBaseAmount: number, 
+    maxAnotherAmount: anchor.BN
+  ): Promise<TransactionInstruction> {
+    return program.methods
       .addLiquidity(
-        new anchor.BN(max_base_amount),
-        r.maxAnotherAmount.raw,
+        new anchor.BN(maxBaseAmount),
+        maxAnotherAmount,
         new anchor.BN(0) // fix side == base
       )
       .accounts({
@@ -140,40 +204,16 @@ describe("shotgun-radium", () => {
         ammQuoteVault: poolKeys!.vault.B,
         market: poolKeys!.marketId,
         marketEventQueue: poolKeys!.marketEventQueue,
-        userTokenBase: baseWalletWSolAta,   // SOL
-        userTokenQuote : baseWalletUsdcAta, // USDC
-        userTokenLp: baseWalletLPAta,       // LP
+        userTokenBase: baseWalletWSolAta,  // SOL
+        userTokenQuote: baseWalletUsdcAta, // USDC
+        userTokenLp: baseWalletLPAta,      // LP
         userOwner: baseWallet.publicKey,
       })
-      .signers([baseWallet.payer])
-      // we have to do it to get meaning full error in anchor logs (other wise we get limited logs from tx simulation only)
-      .rpc({ skipPreflight: true });
-
-    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);    
-    console.log("LP tokens after adding liquidity: ", baseWalletLPBalance);
-    assert.ok(baseWalletLPBalance > 0);
-    lpTokensAfterDeposit = baseWalletLPBalance;
-  });
-
-  it("remove liquidity", async () => {
-
-    // const max_base_amount = 1 * LAMPORTS_PER_SOL;
-    // const r = raydium.liquidity.computePairAmount({
-    //   poolInfo,
-    //   amount: max_base_amount,
-    //   baseIn: true,
-    //   slippage: new Percent(1, 100), // 1%
-    // })
-
-    // baseWalletLPAta = (await getOrCreateAssociatedTokenAccount(
-    //   connection,
-    //   baseWallet.payer,
-    //   new PublicKey(poolInfo.lpMint.address),
-    //   baseWallet.publicKey,
-    // )).address;
-    const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
-
-    const tx = await program.methods
+      .instruction();
+  }
+  
+  async function createRemoveLiquidityInstruction(lpTokensToWithdraw: bigint): Promise<TransactionInstruction> {
+    return program.methods
       .removeLiquidity(
         toBN(lpTokensToWithdraw)
       )
@@ -189,10 +229,9 @@ describe("shotgun-radium", () => {
         market: poolKeys!.marketId,
         marketEventQueue: poolKeys!.marketEventQueue,
         userTokenBase: baseWalletWSolAta,   // SOL
-        userTokenQuote : baseWalletUsdcAta, // USDC
+        userTokenQuote: baseWalletUsdcAta,  // USDC
         userTokenLp: baseWalletLPAta,       // LP
         userOwner: baseWallet.publicKey,
-        //
         marketProgram: poolKeys!.marketProgramId,
         marketBaseVault: poolKeys!.marketBaseVault,
         marketQuoteVault: poolKeys!.marketQuoteVault,
@@ -200,17 +239,12 @@ describe("shotgun-radium", () => {
         marketAsks: poolKeys!.marketAsks,
         marketBids: poolKeys!.marketBids
       })
-      .signers([baseWallet.payer])
-      // we have to do it to get meaning full error in anchor logs (other wise we get limited logs from tx simulation only)
-      .rpc({ skipPreflight: true });
-
-    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);    
-    console.log("LP tokens after removing liquidity: ", baseWalletLPBalance);
-    assert.ok(baseWalletLPBalance < lpTokensAfterDeposit);
-  });
+      .instruction();
+  }
 
 
 });
+
 
 /*** Helpers ***/
 
@@ -229,7 +263,7 @@ export async function convertSolToWsol(connection: Connection, payer: Keypair, a
   const amountLamports = amountSol * LAMPORTS_PER_SOL; // Convert SOL input to lamports
   const transaction = new Transaction();
 
-    // If the associated token account does not exist, create it
+  // If the associated token account does not exist, create it
   const wsolAta = await getOrCreateAssociatedTokenAccount(
     connection,
     payer,           // Payer
