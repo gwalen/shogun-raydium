@@ -1,21 +1,18 @@
 import * as anchor from "@coral-xyz/anchor";
 import { Program } from "@coral-xyz/anchor";
 import { ShotgunRadium } from "../target/types/shotgun_radium";
-import { PublicKey, Connection, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, sendAndConfirmTransaction } from "@solana/web3.js";
+import { PublicKey, Connection, Keypair, LAMPORTS_PER_SOL, Transaction, SystemProgram, sendAndConfirmTransaction, Signer, TransactionInstruction, AddressLookupTableAccount, VersionedTransaction, TransactionMessage, ConfirmOptions, TransactionSignature } from "@solana/web3.js";
 import * as assert from "assert";
 import { createSyncNativeInstruction, getAccount, getAssociatedTokenAddressSync, getOrCreateAssociatedTokenAccount, NATIVE_MINT } from "@solana/spl-token";
 import {
   ApiV3PoolInfoStandardItem,
-  TokenAmount,
-  toToken,
   Percent,
   AmmV4Keys,
   AmmV5Keys,
-  printSimulate,
   Raydium,
-  getAssociatedPoolKeys,
   OPEN_BOOK_PROGRAM,
   LiquidityPoolKeys,
+  toBN,
 } from '@raydium-io/raydium-sdk-v2'
 
 
@@ -38,7 +35,6 @@ describe("shotgun-radium", () => {
 
   const program = anchor.workspace.ShotgunRadium as Program<ShotgunRadium>;
 
-  let liquidityPoolKeys: LiquidityPoolKeys;
   let raydium: Raydium;
   let poolKeys: AmmV4Keys | AmmV5Keys | undefined;
   let poolInfo: ApiV3PoolInfoStandardItem;
@@ -53,16 +49,16 @@ describe("shotgun-radium", () => {
     assert.ok(baseWalletSolBalance > AIRDROP_SOL_AMOUNT);
 
     // this is already created and imported in Anchor.toml (USDC ATA account)
-    // baseWalletUsdcAta = getAssociatedTokenAddressSync(
-    //   USDC_MINT_ADDRESS,
-    //   baseWallet.publicKey,
-    // );
-    baseWalletUsdcAta = (await getOrCreateAssociatedTokenAccount(
-      connection,
-      baseWallet.payer,
+    baseWalletUsdcAta = getAssociatedTokenAddressSync(
       USDC_MINT_ADDRESS,
-      baseWallet.publicKey
-    )).address;
+      baseWallet.publicKey,
+    );
+    // baseWalletUsdcAta = (await getOrCreateAssociatedTokenAccount(
+    //   connection,
+    //   baseWallet.payer,
+    //   USDC_MINT_ADDRESS,
+    //   baseWallet.publicKey
+    // )).address;
     baseWalletWSolAta = (await getOrCreateAssociatedTokenAccount(
       connection,
       baseWallet.payer,
@@ -95,51 +91,20 @@ describe("shotgun-radium", () => {
     poolInfo = data[0] as ApiV3PoolInfoStandardItem;
     poolKeys = await raydium.liquidity.getAmmPoolKeys(poolId);
 
-    // in the example this is for devnet (??)
-    // const data = await raydium.liquidity.getPoolInfoFromRpc({ poolId })
-    // poolInfo = data.poolInfo
-    // poolKeys = data.poolKeys
-
     console.log("Pool info: ", poolInfo);
     console.log("Pool keys: ", poolKeys);
-    // const marketId = new PublicKey(poolKeys.marketId);
-    // const marketId = poolInfo.marketId;
-    // const baseMint = new PublicKey(poolKeys.mintA.address);
-    // const quoteMint = new PublicKey(poolKeys.mintB.address);
-    // const baseDecimals = poolKeys.mintA.decimals;
-    // const quoteDecimals = poolKeys.mintB.decimals;
-    // const programId = new PublicKey(poolKeys.programId);
-
-    // console.log("market id : ", marketId);
-    // console.log("base mint : ", baseMint);
-    // console.log("quote mint : ", quoteMint);
-    // console.log("base decimals : ", baseDecimals);
-    // console.log("quote decimals : ", quoteDecimals);
-    // console.log("program id : ", programId);
-    // console.log("market program id : ", marketProgramId);
-
-    // liquidityPoolKeys = getAssociatedPoolKeys({
-    //   version: 4,
-    //   marketVersion: 3,
-    //   marketId: new PublicKey(poolInfo.marketId),
-    //   baseMint: new PublicKey(poolInfo.mintA.address),
-    //   quoteMint: new PublicKey(poolInfo.mintB.address),
-    //   baseDecimals: poolInfo.mintA.decimals,
-    //   quoteDecimals: poolInfo.mintB.decimals,
-    //   programId: new PublicKey(poolInfo.programId),
-    //   marketProgramId,
-    // });
-    // console.log("liquidity pool keys: \n", liquidityPoolKeys)
 
     baseWalletLPAta = getAssociatedTokenAddressSync(
       new PublicKey(poolInfo.lpMint.address),
       baseWallet.publicKey,
     );
 
-    // Add your test here.
+    // TODO: remove this is early testing
     const tx = await program.methods.initialize().rpc();
     console.log("Your transaction signature", tx);
   });
+
+  let lpTokensAfterDeposit = 0n;
 
   it("add liquidity", async () => {
 
@@ -181,16 +146,73 @@ describe("shotgun-radium", () => {
         userOwner: baseWallet.publicKey,
       })
       .signers([baseWallet.payer])
+      // we have to do it to get meaning full error in anchor logs (other wise we get limited logs from tx simulation only)
       .rpc({ skipPreflight: true });
 
     const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);    
     console.log("LP tokens after adding liquidity: ", baseWalletLPBalance);
     assert.ok(baseWalletLPBalance > 0);
+    lpTokensAfterDeposit = baseWalletLPBalance;
+  });
 
+  it("remove liquidity", async () => {
+
+    // const max_base_amount = 1 * LAMPORTS_PER_SOL;
+    // const r = raydium.liquidity.computePairAmount({
+    //   poolInfo,
+    //   amount: max_base_amount,
+    //   baseIn: true,
+    //   slippage: new Percent(1, 100), // 1%
+    // })
+
+    // baseWalletLPAta = (await getOrCreateAssociatedTokenAccount(
+    //   connection,
+    //   baseWallet.payer,
+    //   new PublicKey(poolInfo.lpMint.address),
+    //   baseWallet.publicKey,
+    // )).address;
+    const lpTokensToWithdraw = lpTokensAfterDeposit / 10n;
+
+    const tx = await program.methods
+      .removeLiquidity(
+        toBN(lpTokensToWithdraw)
+      )
+      .accounts({
+        ammProgram: poolInfo.programId,
+        amm: poolInfo.id,
+        ammAuthority: poolKeys!.authority,
+        ammOpenOrders: poolKeys!.openOrders,
+        ammTargetOrders: poolKeys!.targetOrders,
+        ammLpMint: poolInfo.lpMint.address,
+        ammBaseVault: poolKeys!.vault.A,
+        ammQuoteVault: poolKeys!.vault.B,
+        market: poolKeys!.marketId,
+        marketEventQueue: poolKeys!.marketEventQueue,
+        userTokenBase: baseWalletWSolAta,   // SOL
+        userTokenQuote : baseWalletUsdcAta, // USDC
+        userTokenLp: baseWalletLPAta,       // LP
+        userOwner: baseWallet.publicKey,
+        //
+        marketProgram: poolKeys!.marketProgramId,
+        marketBaseVault: poolKeys!.marketBaseVault,
+        marketQuoteVault: poolKeys!.marketQuoteVault,
+        marketAuthority: poolKeys!.marketAuthority,
+        marketAsks: poolKeys!.marketAsks,
+        marketBids: poolKeys!.marketBids
+      })
+      .signers([baseWallet.payer])
+      // we have to do it to get meaning full error in anchor logs (other wise we get limited logs from tx simulation only)
+      .rpc({ skipPreflight: true });
+
+    const baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);    
+    console.log("LP tokens after removing liquidity: ", baseWalletLPBalance);
+    assert.ok(baseWalletLPBalance < lpTokensAfterDeposit);
   });
 
 
 });
+
+/*** Helpers ***/
 
 export async function airdrop(connection: Connection, userPubkey: PublicKey) {
   const signature = await connection.requestAirdrop(userPubkey, AIRDROP_SOL_AMOUNT)
@@ -234,4 +256,58 @@ export async function convertSolToWsol(connection: Connection, payer: Keypair, a
 
   // Return the WSOL-associated token account address
   return wsolAta.address;
+}
+
+export function buildV0Transaction(
+  signers: Signer[],
+  instructions: TransactionInstruction[],
+  latestBlockhash: string,
+  addressLookupTableAccounts?: AddressLookupTableAccount[],
+): VersionedTransaction {
+
+  const messageV0 = new TransactionMessage({
+    payerKey: signers[0].publicKey,
+    recentBlockhash: latestBlockhash,
+    instructions
+  }).compileToV0Message(addressLookupTableAccounts);
+
+  const tx = new VersionedTransaction(messageV0);
+  tx.sign(signers);
+  return tx;
+}
+
+
+export async function sendTxWithConfirmation(
+  provider: anchor.AnchorProvider,
+  signers: Signer[],
+  instructions: TransactionInstruction[],
+  lookupTableAddress?: PublicKey,
+  confirmOptions?: ConfirmOptions
+): Promise<TransactionSignature> {
+
+  let latestBlockhashData = await provider.connection.getLatestBlockhash();
+
+  // let lookupTableAccounts: AddressLookupTableAccount[] | undefined = undefined;
+  let lookupTableAccounts: AddressLookupTableAccount[] = [];
+  if (lookupTableAddress != null) {
+    const lookupTableAccount = await provider.connection
+      .getAddressLookupTable(lookupTableAddress)
+      .then((resp) => resp.value);
+    if (lookupTableAccount === null) {
+      throw new Error(`Lookup table account not found: ${lookupTableAddress.toBase58()}`);
+    }
+    lookupTableAccounts = [lookupTableAccount];
+  }
+
+  const txV0 = buildV0Transaction(signers, instructions, latestBlockhashData.blockhash, lookupTableAccounts);
+
+  // will send tx and wait for confirmation with default confirmation level of the provider
+  const txSignature = await provider.sendAndConfirm(txV0, signers, {
+    // this is to get verbose error in anchor logs (can only be used in testing)  
+    skipPreflight: true,
+    // if commitment is not defined use default provider commitment (processed)
+    commitment: confirmOptions === undefined ? provider.opts.commitment : confirmOptions.commitment
+  });
+
+  return txSignature;
 }
