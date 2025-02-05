@@ -20,6 +20,7 @@ const USDC_MINT_ADDRESS = new PublicKey("EPjFWdd5AufqSSqeM2qN1xzybapC8G4wEGGkZwy
 // this usdc is present on the baseWallet usdc ata thanks to anchor.toml account import
 // this account is defined in: usdc_base_wallet_token.json
 const USDC_AMOUNT_IMPORTED_WITH_ANCHOR_TOML = 420690000000000n;
+const SOL_USDC_POOL_ID = "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2";
 
 describe("shotgun-radium", () => {
   // Configure the client to use the local cluster.
@@ -66,8 +67,8 @@ describe("shotgun-radium", () => {
     // console.log("base wallet WSOL:", baseWalletWSolBalance);
   });
 
-  it("Is initialized!", async () => {
-    const poolId = "58oQChx4yWmvKdwLLZzBi4ChoCc2fqCUWBkwMihLYQo2";
+  it("Fetch pool data", async () => {
+    const poolId = SOL_USDC_POOL_ID;
 
     raydium = await Raydium.load({
       owner: baseWallet.payer, //owner,
@@ -88,15 +89,11 @@ describe("shotgun-radium", () => {
       new PublicKey(poolInfo.lpMint.address),
       baseWallet.publicKey,
     );
-
-    // TODO: remove this is early testing
-    // const tx = await program.methods.initialize().rpc();
-    // console.log("Your transaction signature", tx);
   });
 
   let lpTokensAfterDeposit = 0n;
 
-  it("add liquidity", async () => {
+  it("Add liquidity transaction", async () => {
 
     const maxBaseAmount = 1 * LAMPORTS_PER_SOL;
     const r = raydium.liquidity.computePairAmount({
@@ -127,7 +124,7 @@ describe("shotgun-radium", () => {
     lpTokensAfterDeposit = baseWalletLPBalance;
   });
 
-  it("remove liquidity", async () => {
+  it("Remove liquidity transaction", async () => {
     let baseWalletLPBalance = await getAccount(connection, baseWalletLPAta).then((token) => token.amount);
 
     // Remove all liquidity
@@ -147,7 +144,7 @@ describe("shotgun-radium", () => {
   });
 
 
-  it("add liquidity and remove liquidity", async () => {
+  it("Add and remove liquidity in one transaction", async () => {
 
     const maxBaseAmountDeposit = 1 * LAMPORTS_PER_SOL;
     const r = raydium.liquidity.computePairAmount({

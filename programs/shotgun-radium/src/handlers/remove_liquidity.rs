@@ -5,7 +5,7 @@ use raydium_amm_cpi::Withdraw;
 
 pub fn handler(
     ctx: Context<RemoveLiquidity>,
-    amount: u64,
+    lp_token_amount: u64,
 ) -> Result<()> {
 
     let raydium_withdraw_accounts = Withdraw::from(&ctx.accounts);
@@ -14,5 +14,5 @@ pub fn handler(
         raydium_withdraw_accounts
     );
 
-    raydium_amm_cpi::withdraw(raydium_withdraw_cpi_ctx, amount)
+    raydium_amm_cpi::withdraw(raydium_withdraw_cpi_ctx, lp_token_amount)
 }
