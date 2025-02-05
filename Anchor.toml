@@ -7,7 +7,7 @@ resolution = true
 skip-lint = false
 
 [programs.localnet]
-shotgun_radium = "CHbnhtNeCb6YmDkesWCbh2swC35HqkGPhC7q17CzMuak"
+shogun_raydium = "CHbnhtNeCb6YmDkesWCbh2swC35HqkGPhC7q17CzMuak"
 
 [registry]
 url = "https://api.apr.dev"
